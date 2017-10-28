@@ -3,15 +3,15 @@ library(readr)
 library(bindr)
 library(dplyr)
 
-matches_with_mex <- read_csv("/Users/rodolfoocampo/Documents/Datalab/Proyectos/Causal change/Data/pp2_mexico.csv")
-matches_with_mex2 <- read_csv("/Users/rodolfoocampo/Documents/Datalab/Proyectos/Causal change/Data/pp2_mexico2.csv")
+matches_with_mex <- read_csv("/Users/macbook/R/causalperception/pp2_mexico.csv")
+matches_with_mex2 <- read_csv("/Users/macbook/R/causalperception/pp2_mexico2.csv")
 
 all_matches_with_mex <- rbind(matches_with_mex,matches_with_mex2)
 
 
 full_data <- all_matches_with_mex[3:10]
 
-full_data <- mutate(full_data, match_id = paste(left_lat, left_long, right_lat, right_long))
+full_data <- mutate(full_data, match_id = paste(left_id, right_id))
 
 left <- full_data$left_id
 
@@ -33,48 +33,43 @@ all_data <- all_data[c(-4,-5,-6,-7)]
 all_data$margin[all_data$winner == "left"] <- 1
 all_data$margin[all_data$winner != "left"] <- -1
 
-data("ausopen2012")
-data <- data[c("Winner", "Loser", "Round", "WRank", "LRank")]
-data <- reshape(data,
-                idvar = "match_id",
-                varying = list(c(1, 2), c(2, 1), c(4, 5), c(5,4)),
-                v.names = c("Player", "Opponent", "WRank", "LRank"),
-                new.row.names = 1:1000, 
-                timevar = "t",
-                direction = "long")
+all_data$Lrank <- 1
+all_data$Rrank <- 1
 
+all_data <- all_data[which(all_data$winner != "equal"),]
 
+all_data$t <- NULL
+all_data$mu1 <- NA
+all_data$sigma1 <- NA
+all_data$mu2 <- NA
+all_data$sigma2 <- NA
 
-# data comes preformatted with winner in Player column
-# set margin to 1 for win and -1 for loss.
+colnames(all_data)[4] <- "Round"
 
-data$margin[data$t == "1"] <- 1
-data$margin[data$t != "1"] <- -1
-data$t <- NULL
-
-data$mu1 <- NA
-data$sigma1 <- NA
-data$mu2 <- NA
-data$sigma2 <- NA
 
 # For the first round, set Mu to 300 less the ATP rank
 # Skill tends to be stable at the higher rankings (descending from 1), 
 # so set sigma at mu less mu / 3, rather than the recommended mu / 3
 
-data[c("mu1","sigma1")] <- c(300 - data$WRank, 
-                             round(300 - data$WRank - ((300 - data$WRank) / 3), 1))
-data[c("mu2","sigma2")] <- c(300 - data$LRank, 
-                             round(300 - data$LRank - ((300 - data$WRank) / 3), 1)) 
+# data[c("mu1","sigma1")] <- c(300 - data$WRank, 
+#                              round(300 - data$WRank - ((300 - data$WRank) / 3), 1))
+# data[c("mu2","sigma2")] <- c(300 - data$LRank, 
+#                              round(300 - data$LRank - ((300 - data$WRank) / 3), 1)) 
+# 
+# data[!data$Round == "1st Round",][c("mu1","sigma1")] <- c(NA, NA)
+# data[!data$Round == "1st Round",][c("mu2","sigma2")] <- c(NA, NA)
 
-data[!data$Round == "1st Round",][c("mu1","sigma1")] <- c(NA, NA)
-data[!data$Round == "1st Round",][c("mu2","sigma2")] <- c(NA, NA)
+all_data[c("mu1","sigma1")] <- c(all_data$Lrank, round(all_data$Lrank/3,1))
+all_data[c("mu2","sigma2")] <- c(all_data$Rrank, round(all_data$Rrank/3,1))
 
 parameters <- Parameters()
+all_data$Round <-  as.factor(all_data$Round)
 
 # Trueskill expects data with columns mu1, sigma1, mu2 and sigma2, 
 # will set mu and sigma to 25 and 25 / 3 if NA.
 
-# data <- Trueskill(data, parameters)
+all_data <- Trueskill(all_data, parameters)
+
 # top4 <- subset(data, Player == "Djokovic N." | Player == "Nadal R." | 
 #                      Player == "Federer R." | Player == "Murray A." )
 # top4 <- top4[order(top4$Player,top4$Round),]
